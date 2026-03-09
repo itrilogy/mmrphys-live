@@ -1,0 +1,36 @@
+{
+    "FRAME_NUM": 3,
+    "modelType": "BigSmall",
+    "TASKS": [
+        "AU",
+        "BVP",
+        "RESP"
+    ],
+    "FS": 30,
+    "sampling_rate": 30,
+    "input_size": {
+        "big": [
+            3,
+            3,
+            144,
+            144
+        ],
+        "small": [
+            3,
+            3,
+            9,
+            9
+        ]
+    },
+    "output_names": [
+        "au_out",
+        "bvp_out",
+        "resp_out"
+    ],
+    "model_path": "/models/bigsmall/model.onnx",
+    "model_info": {
+        "name": "BigSmall_Multitask_BP4D",
+        "version": "1.0",
+        "description": "Multitask model for AUs (12), BVP and Respiration"
+    }
+}

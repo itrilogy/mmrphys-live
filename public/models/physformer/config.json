@@ -1,0 +1,32 @@
+{
+    "FRAME_NUM": 160,
+    "modelType": "PhysFormer",
+    "TASKS": [
+        "BVP"
+    ],
+    "FS": 30,
+    "sampling_rate": 30,
+    "input_size": [
+        1,
+        3,
+        160,
+        128,
+        128
+    ],
+    "output_names": [
+        "rPPG"
+    ],
+    "model_path": "/models/physformer/model.onnx",
+    "model_info": {
+        "name": "PhysFormer_PURE_Expert",
+        "version": "1.0",
+        "description": "High precision Transformer-based model (Expert Scene)"
+    },
+    "signal_parameters": {
+        "bvp": {
+            "min_rate": 40,
+            "max_rate": 180,
+            "buffer_size": 160
+        }
+    }
+}

@@ -1,0 +1,31 @@
+{
+    "FRAME_NUM": 128,
+    "TASKS": [
+        "BVP"
+    ],
+    "FS": 30,
+    "sampling_rate": 30,
+    "input_size": [
+        1,
+        3,
+        128,
+        72,
+        72
+    ],
+    "output_names": [
+        "rPPG"
+    ],
+    "model_path": "/models/physnet/model.onnx",
+    "model_info": {
+        "name": "PhysNet_PURE",
+        "version": "1.0",
+        "description": "PhysNet model trained on PURE dataset"
+    },
+    "signal_parameters": {
+        "bvp": {
+            "min_rate": 40,
+            "max_rate": 180,
+            "buffer_size": 128
+        }
+    }
+}

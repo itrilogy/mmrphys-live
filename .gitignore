@@ -10,7 +10,6 @@ _site/
 .jekyll-cache/
 .jekyll-metadata
 **/__pycache__/**
-public/**
 
 # Additional Ruby/bundler ignore for when you run: bundle install
 /vendor

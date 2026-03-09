@@ -1,0 +1,32 @@
+{
+    "FRAME_NUM": 20,
+    "modelType": "TSCAN",
+    "TASKS": [
+        "BVP"
+    ],
+    "FS": 30,
+    "sampling_rate": 30,
+    "input_size": [
+        1,
+        6,
+        20,
+        72,
+        72
+    ],
+    "output_names": [
+        "output"
+    ],
+    "model_path": "/models/rphys/model_tscan.onnx",
+    "model_info": {
+        "name": "TS-CAN_PURE",
+        "version": "1.0",
+        "description": "TS-CAN model trained on PURE dataset"
+    },
+    "signal_parameters": {
+        "bvp": {
+            "min_rate": 40,
+            "max_rate": 180,
+            "buffer_size": 20
+        }
+    }
+}
