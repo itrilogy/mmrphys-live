@@ -59,6 +59,7 @@ export interface VitalSigns {
     filteredRespSignal: number[];
     bvpQuality: 'excellent' | 'good' | 'moderate' | 'poor';
     respQuality: 'excellent' | 'good' | 'moderate' | 'poor';
+    actionUnits?: number[];
 }
 
 export interface ControlsProps {
@@ -67,6 +68,7 @@ export interface ControlsProps {
     onStart: () => void;
     onStop: () => void;
     onExport: () => void;
+    onGenerateReport: () => void;
     onVideoFileSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -95,6 +97,7 @@ export interface SignalBuffers {
         filtered: number[];
         metrics: SignalMetrics;
     };
+    actionUnits?: number[];
     timestamp: string;
 }
 
@@ -146,8 +149,25 @@ export interface InferenceResult {
         filtered: number[];
         metrics: SignalMetrics;
     };
+    actionUnits?: number[]; // Added for BigSmall multitask model
     timestamp: string;
     performanceMetrics: PerformanceMetrics;
+}
+
+// Scene Configuration Types
+export type SceneType = 'lite' | 'balanced' | 'pro' | 'expert';
+
+export interface SceneConfig {
+    id: SceneType;
+    name: string;
+    description: string;
+    modelPath: string;
+    configPath: string;
+    shortModelName: string;
+    features: string[];
+    icon: string;
+    recommendedFPS: number;
+    chunkLength: number;
 }
 
 // Worker Message Type
@@ -166,6 +186,7 @@ export interface FilterCoefficients {
 
 export interface ModelConfig {
     sampling_rate: number;
-    input_size: number[];
+    input_size: any; // Can be number[] or object for multi-input
     output_names: string[];
+    modelType?: string; // e.g., 'Balanced', 'TSCAN', 'PhysFormer', 'BigSmall'
 }

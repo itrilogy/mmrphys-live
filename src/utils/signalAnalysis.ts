@@ -141,7 +141,7 @@ export class SignalAnalyzer {
 
         return constrainedRate;
     }
-    
+
     /**
      * Calculate frequency-based SNR using physiological frequency bands
      * @param signal The filtered signal array
@@ -397,7 +397,7 @@ export class SignalAnalyzer {
         peaks.sort((a, b) => b.power - a.power);
 
         if (peaks.length === 0) {
-            return (minFreq + maxFreq) / 2;
+            return 0;
         }
 
         // Improved harmonic detection

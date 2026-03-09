@@ -7,7 +7,7 @@ const Banner: React.FC = () => {
             <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                 <div style={{ maxWidth: '600px', textAlign: 'center', margin: '0 auto' }}>
                     <h1 className="text-lg text-gray-400" style={{ textAlign: 'center' }}>
-                        Remote Physiological Sensing using Webcam/ Recorded Video
+                        通过网络摄像头/录制视频进行远程生理感知监测
                     </h1>
                 </div>
             </div>

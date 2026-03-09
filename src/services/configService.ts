@@ -6,8 +6,9 @@ export type ModelConfig = {
     TASKS: string[];
     FS: number;
     sampling_rate: number;
-    input_size: number[];
+    input_size: any; // Flexible for multi-input
     output_names: string[];
+    modelType?: string; // New: 'TSCAN', 'BigSmall', 'PhysFormer', 'Balanced'
     model_info: {
         name: string;
         version: string;
@@ -43,40 +44,33 @@ class ConfigService {
         return ConfigService.instance;
     }
 
-    public async getConfig(): Promise<ModelConfig> {
-        if (this.config) {
-            return this.config;
+    public async getConfig(configPath?: string): Promise<ModelConfig> {
+        if (configPath || !this.config) {
+            this.config = await this.loadConfig(configPath);
         }
-
-        if (!this.configPromise) {
-            this.configPromise = this.loadConfig();
-        }
-
-        try {
-            const config = await this.configPromise;
-            return config;
-        } catch (error) {
-            console.error('[ConfigService] Failed to load config:', error);
-            throw new Error('Configuration failed to load: ' + (error instanceof Error ? error.message : String(error)));
-        }
+        return this.config;
     }
 
     public async getFrameWidth(): Promise<number> {
         try {
             const config = await this.getConfig();
+            const inputSize = config.input_size;
 
-            // Check if input_size exists and has the expected structure
-            if (config.input_size && Array.isArray(config.input_size) && config.input_size.length >= 5) {
-                // Width is the last dimension in [B,C,T,H,W]
-                const width = config.input_size[4];
-                console.log(`[ConfigService] Found frame width in config: ${width}`);
-                return width;
+            // BigSmall special case (144x144)
+            if (config.modelType === 'BigSmall') return 144;
+
+            // Standard [B, C, T, H, W] or similar
+            if (Array.isArray(inputSize)) {
+                return inputSize[inputSize.length - 1];
             }
 
-            console.warn('[ConfigService] Could not find frame width in config, using default of 72');
-            return 72; // Default if not found
+            // Object based multi-input
+            if (typeof inputSize === 'object' && inputSize?.width) {
+                return inputSize.width;
+            }
+
+            return 72;
         } catch (error) {
-            console.warn('[ConfigService] Error getting frame width, using default:', error);
             return 72;
         }
     }
@@ -84,19 +78,20 @@ class ConfigService {
     public async getFrameHeight(): Promise<number> {
         try {
             const config = await this.getConfig();
+            const inputSize = config.input_size;
 
-            // Check if input_size exists and has the expected structure
-            if (config.input_size && Array.isArray(config.input_size) && config.input_size.length >= 5) {
-                // Height is the 2nd last dimension in [B,C,T,H,W]
-                const height = config.input_size[3];
-                console.log(`[ConfigService] Found frame height in config: ${height}`);
-                return height;
+            if (config.modelType === 'BigSmall') return 144;
+
+            if (Array.isArray(inputSize) && inputSize.length >= 2) {
+                return inputSize[inputSize.length - 2];
             }
 
-            console.warn('[ConfigService] Could not find frame height in config, using default of 72');
-            return 72; // Default if not found
+            if (typeof inputSize === 'object' && inputSize?.height) {
+                return inputSize.height;
+            }
+
+            return 72;
         } catch (error) {
-            console.warn('[ConfigService] Error getting frame height, using default:', error);
             return 72;
         }
     }
@@ -125,13 +120,13 @@ class ConfigService {
     }
 
 
-    private async loadConfig(): Promise<ModelConfig> {
+    private async loadConfig(customPath?: string): Promise<ModelConfig> {
         try {
-            const configPath = ApplicationPaths.rphysConfig();
+            const configPath = customPath || ApplicationPaths.rphysConfig();
             console.log(`[ConfigService] Loading model configuration from ${configPath}`);
 
             const response = await fetch(configPath, {
-                cache: 'force-cache',
+                cache: 'default', // Changed from force-cache to allow dynamic updates
                 credentials: 'same-origin',
                 headers: {
                     'Accept': 'application/json'
@@ -143,25 +138,25 @@ class ConfigService {
             }
 
             const configData = await response.json();
-            console.log('[ConfigService] Raw config data:', configData);
 
             // Perform additional validation
             if (!configData || typeof configData !== 'object') {
                 throw new Error('Config is null or not an object');
             }
 
-            // Verify expected structure
-            if (!Array.isArray(configData.input_size)) {
-                throw new Error('Config is missing input_size array');
+            if (!configData.input_size || (typeof configData.input_size !== 'object' && !Array.isArray(configData.input_size))) {
+                throw new Error('Config is missing valid input_size');
             }
 
-            this.config = configData as ModelConfig;
+            const config = configData as ModelConfig;
+
+            // Only update the singleton choice if it's the default or explicitly requested to be main
+            if (!customPath) {
+                this.config = config;
+            }
+
             this.configLoadAttempted = true;
-
-            console.log('[ConfigService] Model configuration loaded successfully');
-            console.log('[ConfigService] Input dimensions:', configData.input_size);
-
-            return this.config;
+            return config;
         } catch (error) {
             this.configLoadAttempted = true;
             console.error('[ConfigService] Error loading config:', error);

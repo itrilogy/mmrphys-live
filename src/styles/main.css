@@ -1,543 +1,137 @@
-/* Performance optimized CSS with hardware acceleration and efficient selectors */
+@import "tailwindcss";
+
+@theme {
+    --font-sans: "Inter", "system-ui", "sans-serif";
+    --radius-4xl: 2rem;
+    --radius-5xl: 3rem;
+    --radius-6xl: 4rem;
+}
+
+/* BioPulse 3.2 Design System - Light Protocol Version */
 :root {
-    /* Theme colors */
-    --primary-color: #2c3e50;
-    --secondary-color: #34495e;
-    --accent-color: #3498db;
-    --success-color: #2ecc71;
-    --warning-color: #f1c40f;
-    --error-color: #e74c3c;
-    --text-color: #2c3e50;
-    --background-color: #ecf0f1;
+    /* Core Theme - Pristine Medical/Laboratory Gray */
+    --background: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #020617;
+    --text-secondary: #64748b;
+    --accent-primary: #e11d48;
+    /* Rose 600 */
+    --accent-secondary: #2563eb;
+    /* Blue 600 */
+    --accent-success: #10b981;
+    /* Emerald 500 */
 
-    /* Layout variables */
-    --chart-height: 300px;
-    --header-height: 60px;
-    --footer-height: 40px;
-    --container-max-width: 1200px;
-    --border-radius: 4px;
+    /* Layout */
+    --chart-height: 280px;
+    --header-height: 100px;
+    --container-max-width: 1400px;
+    --border-soft: rgba(0, 0, 0, 0.05);
 
-    /* Animation variables */
-    --transition-speed: 0.2s;
-
-    /* Chart colors */
-    --bvp-color: rgb(75, 192, 192);
-    --bvp-color-light: rgba(75, 192, 192, 0.2);
-    --resp-color: rgb(255, 99, 132);
-    --resp-color-light: rgba(255, 99, 132, 0.2);
+    /* Dedicated Shadows to bypass Tailwind v4 Parse Errors with Auto-formatting */
+    --biopulse-shadow-sm: 0 20px 50px rgba(0, 0, 0, 0.03);
+    --biopulse-shadow-md: 0 40px 80px rgba(0, 0, 0, 0.06);
 }
 
-/* Reset with performance considerations */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+@layer base {
+    body {
+        @apply bg-[#f8fafc] text-slate-950 font-sans antialiased;
+        background-image:
+            radial-gradient(circle at 2px 2px, rgba(0, 0, 0, 0.02) 1px, transparent 0);
+        background-size: 32px 32px;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply font-black italic tracking-tighter uppercase;
+    }
 }
 
-/* Base styles */
-html {
-    font-size: 16px;
-    height: 100%;
+@layer components {
+
+    /* BioPulse 3.2 Signature Card */
+    .biopulse-card {
+        @apply bg-white rounded-[3.5rem] border border-slate-200/60 transition-all duration-500;
+        box-shadow: var(--biopulse-shadow-sm);
+    }
+
+    .biopulse-card-hover:hover {
+        @apply -translate-y-1;
+        box-shadow: var(--biopulse-shadow-md);
+    }
+
+    .biopulse-stat-label {
+        @apply text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1;
+    }
+
+    .biopulse-stat-value {
+        @apply font-black italic tracking-tighter tabular-nums leading-none;
+    }
+
+    /* BioPulse 3.2 Button Architecture */
+    .controls {
+        @apply flex flex-wrap gap-2 items-center;
+    }
+
+    .btn-biopulse {
+        @apply flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm border;
+    }
+
+    .btn-biopulse-primary {
+        @apply flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm border bg-slate-950 text-white border-slate-950 hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-slate-950/20;
+    }
+
+    .btn-biopulse-secondary {
+        @apply flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed shadow-md bg-white text-slate-950 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:-translate-y-0.5 active:translate-y-0;
+    }
+
+    .btn-biopulse-accent {
+        @apply flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm border bg-[#006969] text-white border-[#006969] hover:bg-[#007a7a] hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-[#006969]/20;
+    }
 }
 
-body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-        Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: var(--background-color);
-    color: var(--text-color);
-    height: 100%;
-    overflow-x: hidden;
-    line-height: 1.5;
-}
-
-/* App Layout */
-.app-container {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    min-height: 100vh;
-    width: 100%;
-    max-width: var(--container-max-width);
-    margin: 0 auto;
-    padding: 1rem;
-    padding-bottom: 60px;
-}
-
-.app-main {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2rem;
-}
-
-/* Header styles */
-.app-header {
-    text-align: center;
-    padding: 1rem 0;
-    width: 100%;
-}
-
-h1 {
-    margin-bottom: 1rem;
-    font-size: 1.75rem;
-    font-weight: 600;
-}
-
-/* Control buttons */
-.controls {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-}
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: var(--border-radius);
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity var(--transition-speed) ease-out;
-    background-color: var(--accent-color);
-    color: white;
-}
-
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn:not(:disabled):hover {
-    opacity: 0.9;
-}
-
-.btn-icon {
-    margin-right: 0.5rem;
-}
-
-/* Video section */
-.video-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    width: 100%;
-}
-
-.oval-frame {
-    position: relative;
-    width: 320px;
-    height: 320px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 3px solid var(--accent-color);
-    background-color: black;
-    transition: border-color 0.3s ease;
-}
-
-.oval-frame canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-    background-color: black;
-}
-
-.oval-frame.face-detected {
-    border-color: var(--success-color);
-}
-
-.buffer-progress {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 24px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 4px;
-}
-
-.progress-bar {
-    height: 100%;
-    background-color: var(--success-color);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-
-.progress-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.no-face-warning {
-    margin-top: 8px;
-    color: var(--error-color);
-    text-align: center;
-    font-weight: 500;
-}
-
-.face-guide {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 80%;
-    height: 80%;
-    border: 2px dashed rgba(255, 255, 255, 0.5);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    opacity: 0.6;
-    transition: opacity 0.3s ease;
-}
-
-.face-detected .face-guide {
-    opacity: 0;
-}
-
-.oval-frame:not(.face-detected)::before {
-    content: 'Position face in oval';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    opacity: 0.6;
-    text-align: center;
-    z-index: 10;
-}
-
-/* Charts section */
-.charts-section {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-    width: 100%;
-}
-
-.vital-signs-chart {
-    background: white;
-    border-radius: var(--border-radius);
-    padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    width: 100%;
-}
-
-.vital-signs-chart.not-ready {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: var(--chart-height);
-    opacity: 0.7;
-}
-
-.chart-container {
-    position: relative;
-    height: var(--chart-height);
-    width: 100%;
-    background-color: white;
-    padding: 1rem;
-    border-radius: var(--border-radius);
-}
-
-/* Metrics display */
-.metric {
-    text-align: center;
-    margin-top: 1rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 0.75rem;
-    border-radius: var(--border-radius);
-    transition: all var(--transition-speed) ease-out;
-}
-
-.metrics-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-.rate-metric,
-.snr-metric {
-    padding: 0.75rem;
-    border-radius: var(--border-radius);
-    text-align: center;
-    transition: all var(--transition-speed) ease-out;
-}
-
-/* Rate Metric Colors */
-.rate-metric.low {
-    background-color: rgba(231, 76, 60, 0.1);
-    color: var(--error-color);
-}
-
-.rate-metric.normal {
-    background-color: rgba(46, 204, 113, 0.1);
-    color: var(--success-color);
-}
-
-.rate-metric.high {
-    background-color: rgba(241, 196, 15, 0.1);
-    color: var(--warning-color);
-}
-
-/* SNR Metric Colors */
-.snr-metric.excellent {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: rgb(16, 185, 129);
-}
-
-.snr-metric.good {
-    background-color: rgba(46, 204, 113, 0.1);
-    color: var(--success-color);
-}
-
-.snr-metric.moderate {
-    background-color: rgba(241, 196, 15, 0.1);
-    color: var(--warning-color);
-}
-
-.snr-metric.poor {
-    background-color: rgba(231, 76, 60, 0.1);
-    color: var(--error-color);
-}
-
-/* Metric Text Styles */
-.rate-metric .text-lg,
-.snr-metric .text-lg {
-    font-size: 1.125rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-}
-
-.rate-metric .text-sm,
-.snr-metric .text-sm {
-    font-size: 0.875rem;
-    opacity: 0.75;
-}
-
-.metric.normal {
-    background-color: var(--success-color-light, rgba(46, 204, 113, 0.1));
-    color: var(--success-color);
-    border: 1px solid var(--success-color);
-}
-
-.metric.high {
-    background-color: var(--error-color-light, rgba(231, 76, 60, 0.1));
-    color: var(--error-color);
-    border: 1px solid var(--error-color);
-}
-
-.metric.low {
-    background-color: var(--warning-color-light, rgba(241, 196, 15, 0.1));
-    color: var(--warning-color);
-    border: 1px solid var(--warning-color);
-}
-
-.metric .rate-type {
-    display: block;
-    font-size: 0.7em;
-    opacity: 0.7;
-    margin-top: 0.25rem;
-}
-
-/* Chart customization */
-.chart-placeholder {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 16rem;
-    background-color: #f8fafc;
-    border-radius: var(--border-radius);
-    text-align: center;
-}
-
-.chart-placeholder p {
-    color: #64748b;
-    margin: 0.25rem 0;
-}
-
-.chart-placeholder p:first-child {
-    font-weight: 600;
-    font-size: 1.125rem;
-}
-
-.vital-signs-chart .chart-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
-}
-
-.chartjs-tooltip {
-    background: rgba(0, 0, 0, 0.8);
-    border-radius: var(--border-radius);
-    color: white;
-    padding: 0.5rem;
-    font-size: 0.875rem;
-}
-
-/* Status messages */
-.status-message {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-    text-align: center;
-    padding: 0.75rem;
-    margin: 0;
-    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.status-message.error {
-    background-color: var(--error-color);
-    color: white;
-}
-
-.status-message.success {
-    background-color: var(--success-color);
-    color: white;
-}
-
-.status-message.info {
-    background-color: var(--accent-color);
-    color: white;
-}
-
-.status-message.warning {
-    background-color: var(--warning-color);
-    color: var(--text-color);
-}
-
-/* Loading animation */
-@keyframes pulse {
+/* Animations from rppg-testing (1) */
+@keyframes biopulse-scan {
     0% {
-        opacity: 1;
+        transform: translateY(-100%);
+        opacity: 0;
     }
 
     50% {
-        opacity: 0.5;
+        opacity: 0.1;
     }
 
     100% {
-        opacity: 1;
+        transform: translateY(400px);
+        opacity: 0;
     }
 }
 
-.loading {
-    animation: pulse 1.5s ease-in-out infinite;
+.animate-biopulse-scan {
+    animation: biopulse-scan 4s linear infinite;
 }
 
-/* Responsive design */
+/* Scrollbar styling for a cleaner lab look */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
+
+/* Mobile optimizations */
 @media (max-width: 768px) {
-    .app-container {
-        padding: 0.5rem;
+    :root {
+        --header-height: 140px;
     }
 
-    .charts-section {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-
-    .vital-signs-chart {
-        padding: 0.75rem;
-    }
-
-    .chart-container {
-        padding: 0.75rem;
-    }
-
-    .metric {
-        font-size: 1rem;
-        padding: 0.5rem;
-    }
-
-    .oval-frame {
-        width: 280px;
-        height: 280px;
-    }
-
-    .btn {
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-    }
-
-    h1 {
-        font-size: 1.5rem;
-    }
-
-    .metrics-container {
-        gap: 0.5rem;
-    }
-
-    .rate-metric,
-    .snr-metric {
-        padding: 0.5rem;
-    }
-
-    .rate-metric .text-lg,
-    .snr-metric .text-lg {
-        font-size: 1rem;
-    }
-
-    .rate-metric .text-sm,
-    .snr-metric .text-sm {
-        font-size: 0.75rem;
-    }
-}
-
-/* High DPI screen optimizations */
-@media (-webkit-min-device-pixel-ratio: 2),
-(min-resolution: 192dpi) {
-    .oval-frame {
-        border-width: 2px;
-    }
-}
-
-/* Reduced motion preferences */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
-}
-
-/* Print styles */
-@media print {
-
-    .controls,
-    .video-section {
-        display: none;
-    }
-
-    .charts-section {
-        grid-template-columns: 1fr;
-    }
-
-    .vital-signs-chart {
-        break-inside: avoid;
-        page-break-inside: avoid;
-        box-shadow: none;
-    }
-
-    .chart-container {
-        box-shadow: none;
-        break-inside: avoid;
-        page-break-inside: avoid;
+    .biopulse-card {
+        @apply rounded-[2.5rem];
     }
 }

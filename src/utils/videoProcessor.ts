@@ -46,7 +46,7 @@ export class VideoProcessor {
         this.videoElement.autoplay = true;
 
         this.setupVideoEventListeners();
-        
+
         // Initialize canvases with optimized settings
         this.croppedCanvas = this.createOptimizedCanvas(256, 256);
 
@@ -105,7 +105,7 @@ export class VideoProcessor {
 
         console.log('[VideoProcessor] Video state has been reset');
     }
-    
+
     private calculateCurrentFPS(): number {
         if (this.frameTimestamps.length < 2) return 0;
 
@@ -116,7 +116,7 @@ export class VideoProcessor {
 
         if (timeWindow === 0) return 0;
         return (frameCount * 1000) / timeWindow;
-    }    
+    }
 
     private createOptimizedCanvas(width: number, height: number): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
@@ -312,7 +312,7 @@ export class VideoProcessor {
                 this.faceDetector.noDetectionCount = 0;
                 await this.faceDetector.dispose(); // Properly dispose the detector
             }
-            console.log('Reinitializing face detector...');                
+            console.log('Reinitializing face detector...');
             await this.faceDetector.initialize();
             this.faceDetector.setCapturingState(true); // Ensure capturing state is set
 
@@ -424,7 +424,7 @@ export class VideoProcessor {
 
         // Start the detection loop
         detectFaces();
-    }    
+    }
 
     private async loadConfigSettings(): Promise<void> {
         try {
@@ -477,7 +477,7 @@ export class VideoProcessor {
 
         // Only update if movement is significant
         return distance > this.FACE_DISTANCE_THRESHOLD;
-    }    
+    }
 
     private async updateFaceDetection(): Promise<void> {
         this.faceDetectionFrameCounter++;
@@ -558,7 +558,7 @@ export class VideoProcessor {
         const sorted = [...values].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-    }    
+    }
 
     private getCropRegion(): { x: number; y: number; width: number; height: number } {
         if (this.currentFaceBox) {
@@ -714,7 +714,7 @@ export class VideoProcessor {
         return this._isVideoFileSource &&
             !this._isShuttingDown &&
             this.videoElement.ended;
-    }   
+    }
 
     private processVideoFrame(timestamp: number): void {
         try {
@@ -987,7 +987,7 @@ export class VideoProcessor {
         }
 
         console.log('[VideoProcessor] Reset complete');
-    }    
+    }
 
     /**
      * Get new frames captured since last call and clear new frames buffer

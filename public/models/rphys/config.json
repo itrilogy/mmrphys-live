@@ -1,5 +1,6 @@
 {
     "FRAME_NUM": 181,
+    "modelType": "Balanced",
     "TASKS": [
         "BVP",
         "RSP"

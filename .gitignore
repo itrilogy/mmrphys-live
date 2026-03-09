@@ -55,5 +55,11 @@ yarn-error.log*
 # Optional eslint cache
 .eslintcache
 
-# Local development files
 *.local
+
+# Internal Engineering Docs (Content extracted to README/AboutModal)
+docs/engineering/
+
+# External Reference Projects (Style references and model outputs)
+rppg-testing (1)/
+rPPG-Toolbox/

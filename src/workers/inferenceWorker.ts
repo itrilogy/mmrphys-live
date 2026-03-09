@@ -33,48 +33,82 @@ class InferenceWorker {
     private sequenceLength: number = 181; // Will be updated from config
     private _preprocessingTensor: ort.Tensor | null = null;
     private _preprocessingBuffer: Float32Array | null = null;
+    private _additionalTensors: { [key: string]: ort.Tensor } = {};
 
-    async initialize(): Promise<void> {
-        if (this.isInitialized) return;
+    async initialize(config?: {
+        modelPath?: string;
+        configPath?: string;
+        initialFrames?: number;
+        subsequentFrames?: number;
+    }): Promise<void> {
+        const currentModelPath = config?.modelPath || this.modelConfig?.model_path;
+
+        // Only skip if already initialized with the EXACT same configuration
+        if (this.isInitialized &&
+            this.modelConfig?.model_path === currentModelPath &&
+            this.sequenceLength === (config?.initialFrames || this.sequenceLength)) {
+            console.log('[InferenceWorker] Worker already initialized with same model and sequence length, skipping.');
+            return;
+        }
 
         try {
-            // Configure environment
-            await this.configureOrtEnvironment();
+            this.isInitialized = false; // Mark as not ready during transition
 
-            // Initialize the signal processor
-            console.log('Initializing inference worker and signal processor');
-            this.signalProcessor = new SignalProcessor();
-
-            // Load model configuration using ConfigService
-            console.log('[InferenceWorker] Loading model configuration via ConfigService...');
-            this.modelConfig = await configService.getConfig();
-
-            if (!this.modelConfig) {
-                throw new Error('Failed to load model configuration from ConfigService');
+            // EXPLICITLY DISPOSE PREVIOUS SESSION TO FREE MEMORY
+            if (this.session) {
+                console.log('[InferenceWorker] Disposing previous session before re-initialization');
+                await this.session.release();
+                this.session = null;
             }
 
-            console.log('[InferenceWorker] Model configuration loaded:', this.modelConfig);
+            // Configure environment if not already done
+            await this.configureOrtEnvironment();
 
-            // Get dimensions from config
-            this.frameWidth = await configService.getFrameWidth();
-            this.frameHeight = await configService.getFrameHeight();
-            this.sequenceLength = await configService.getSequenceLength();
+            // Initialize the signal processor if not exists
+            if (!this.signalProcessor) {
+                this.signalProcessor = new SignalProcessor();
+            }
+
+            // Load model configuration using ConfigService
+            console.log('[InferenceWorker] Loading model configuration...', config?.configPath || 'default');
+            this.modelConfig = await configService.getConfig(config?.configPath);
+
+            if (!this.modelConfig) {
+                throw new Error('Failed to load model configuration');
+            }
+
+            // Get dimensions from config, handling both array and object (BigSmall) formats
+            const isBigSmall = this.modelConfig.modelType === 'BigSmall' || !Array.isArray(this.modelConfig.input_size);
+
+            if (isBigSmall && this.modelConfig.input_size && (this.modelConfig.input_size as any).big) {
+                const bigInput = (this.modelConfig.input_size as any).big;
+                this.frameWidth = bigInput[3] || 144;
+                this.frameHeight = bigInput[2] || 144;
+                this.sequenceLength = this.modelConfig.FRAME_NUM || bigInput[0] || 3;
+            } else {
+                const inputArr = this.modelConfig.input_size as number[];
+                this.frameWidth = inputArr[4] || 72;
+                this.frameHeight = inputArr[3] || 72;
+                this.sequenceLength = this.modelConfig.FRAME_NUM || inputArr[2] || 181;
+            }
             this.MIN_FRAMES_REQUIRED = this.sequenceLength;
 
-            console.log(`[InferenceWorker] Using dimensions: ${this.frameWidth}x${this.frameHeight}`);
-            console.log(`[InferenceWorker] Using sequence length: ${this.sequenceLength}`);
+            console.log(`[InferenceWorker] Dimensions: ${this.frameWidth}x${this.frameHeight}, Seq: ${this.sequenceLength}`);
 
             // Update sampling rate from config
             if (this.modelConfig.sampling_rate) {
                 this.fps = this.modelConfig.sampling_rate;
-                console.log(`[InferenceWorker] Using sampling rate: ${this.fps} FPS`);
             }
 
-            // Create session using config values
-            await this.createSession();
+            // Create session using config values or provided path
+            const modelPath = config?.modelPath || this.modelConfig.model_path;
+            await this.createSession(modelPath);
 
-            // Initialize signal processor with config parameters
-            this.signalProcessor = new SignalProcessor(this.fps);
+            // Re-initialize signal processor with potentially new FPS and segment config
+            const initialFrames = config?.initialFrames || this.sequenceLength;
+            const subsequentFrames = config?.subsequentFrames || Math.floor(initialFrames * 0.66);
+
+            this.signalProcessor = new SignalProcessor(this.fps, initialFrames, subsequentFrames);
 
             // Warm up model and processor
             await this.warmup();
@@ -111,134 +145,221 @@ class InferenceWorker {
         }
     }
 
-    private async createSession(): Promise<void> {
-        const modelPath = ApplicationPaths.rphysModel();
-        console.log(`[InferenceWorker] Loading ONNX model from: ${modelPath}`);
+    private async createSession(customModelPath?: string): Promise<void> {
+        try {
+            // Use provided path or fall back to config path
+            const modelPath = customModelPath || this.modelConfig?.model_path;
 
-        const modelResponse = await fetch(modelPath, {
-            cache: 'force-cache',
-            credentials: 'same-origin'
-        });
+            if (!modelPath) {
+                throw new Error('No model path provided');
+            }
 
-        if (!modelResponse.ok) throw new Error(`Failed to fetch model: ${modelResponse.statusText}`);
+            console.log(`[InferenceWorker] Loading model from: ${modelPath}`);
 
-        const modelArrayBuffer = await modelResponse.arrayBuffer();
-        const modelData = new Uint8Array(modelArrayBuffer);
-        console.log('[InferenceWorker] Model loaded, size:', modelData.byteLength);
+            // Ensure we use absolute path for fetching if it doesn't start with /
+            const fetchPath = modelPath.startsWith('http') || modelPath.startsWith('/')
+                ? modelPath
+                : `/${modelPath}`;
 
-        this.session = await ort.InferenceSession.create(modelData, {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all',
-            executionMode: 'sequential',
-            enableCpuMemArena: true,
-            enableMemPattern: true,
-            logSeverityLevel: 0,
-            logVerbosityLevel: 0,
-            intraOpNumThreads: 1,
-            interOpNumThreads: 1
-        });
+            this.session = await ort.InferenceSession.create(fetchPath, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all',
+                executionMode: 'sequential',
+                enableCpuMemArena: true,
+                enableMemPattern: true,
+                logSeverityLevel: 0,
+                logVerbosityLevel: 0,
+                intraOpNumThreads: 1,
+                interOpNumThreads: 1
+            });
 
-        if (!this.session) {
-            throw new Error('Failed to create ONNX session');
+            if (!this.session) {
+                throw new Error('Failed to create ONNX session');
+            }
+
+            this.inputName = this.session.inputNames[0];
+            console.log('[InferenceWorker] Session created successfully');
+            console.log('[InferenceWorker] Input names:', this.session.inputNames);
+            console.log('[InferenceWorker] Output names:', this.session.outputNames);
+        } catch (error) {
+            console.error('[InferenceWorker] Failed to create ONNX session:', error);
+            throw error;
         }
-
-        this.inputName = this.session.inputNames[0];
-        console.log('[InferenceWorker] Session created successfully');
-        console.log('[InferenceWorker] Input names:', this.session.inputNames);
-        console.log('[InferenceWorker] Output names:', this.session.outputNames);
     }
 
     private async warmup(): Promise<void> {
         if (!this.session || !this.signalProcessor) return;
 
         try {
-            console.log('[InferenceWorker] Starting model warmup...');
-
-            // Create dummy input data with the dimensions from config
-            const dummyFrames = Array(this.MIN_FRAMES_REQUIRED).fill(null).map(() => {
-                const imageData = new ImageData(
-                    this.frameWidth,
-                    this.frameHeight
-                );
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    const value = Math.floor(Math.random() * 255);
-                    imageData.data[i] = value;     // R
-                    imageData.data[i + 1] = value; // G
-                    imageData.data[i + 2] = value; // B
-                    imageData.data[i + 3] = 255;   // A
-                }
-                return imageData;
-            });
-
-            // Run warmup inference
-            await this.processFrames(dummyFrames);
-            console.log('[InferenceWorker] Warmup completed successfully');
+            const config = this.modelConfig as any;
+            console.log(`[InferenceWorker] Warming up ${config?.modelType || 'standard'} model...`);
+            const framesToCreate = this.MIN_FRAMES_REQUIRED || 181;
+            const dummyFrames: ImageData[] = [];
+            for (let i = 0; i < framesToCreate; i++) {
+                dummyFrames.push(new ImageData(this.frameWidth || 72, this.frameHeight || 72));
+            }
+            const feeds = this.preprocessFrames(dummyFrames);
+            await this.session.run(feeds);
+            console.log('[InferenceWorker] Warmup successfully completed');
         } catch (error) {
-            console.error('[InferenceWorker] Model warmup error:', error);
-            throw error;
+            console.warn('[InferenceWorker] Warmup failed (non-fatal):', error);
         }
     }
 
-    private preprocessFrames(frameBuffer: ImageData[]): ort.Tensor {
+    private preprocessFrames(frameBuffer: ImageData[]): { [key: string]: ort.Tensor } {
         if (frameBuffer.length < this.MIN_FRAMES_REQUIRED) {
             throw new Error(`Insufficient frames. Need ${this.MIN_FRAMES_REQUIRED}, got ${frameBuffer.length}`);
         }
 
-        // Get the last N frames as configured
         const frames = frameBuffer.slice(-this.MIN_FRAMES_REQUIRED);
+        const config = this.modelConfig as any;
+        const modelType = config?.modelType || 'Balanced';
 
-        // Check input dimensions and log warnings
-        const firstFrame = frames[0];
-        if (firstFrame.width !== this.frameWidth || firstFrame.height !== this.frameHeight) {
-            console.warn(`[InferenceWorker] Input frame dimensions mismatch: got ${firstFrame.width}x${firstFrame.height}, expected ${this.frameWidth}x${this.frameHeight}`);
-            throw new Error(`Frame dimensions mismatch: got ${firstFrame.width}x${firstFrame.height}, expected ${this.frameWidth}x${this.frameHeight}`);
+        // 1. TS-CAN (6 channels: Diff + Raw)
+        if (modelType === 'TSCAN') {
+            const T = frames.length;
+            const H = this.frameHeight;
+            const W = this.frameWidth;
+            const buffer = new Float32Array(T * 6 * H * W);
+
+            for (let f = 0; f < T; f++) {
+                const current = frames[f].data;
+                const prev = frames[f > 0 ? f - 1 : 0].data;
+                for (let i = 0; i < H * W; i++) {
+                    const pos = i * 4;
+                    const offset = f * (6 * H * W) + i;
+                    for (let c = 0; c < 3; c++) {
+                        const cVal = current[pos + c];
+                        const pVal = prev[pos + c];
+                        buffer[offset + c * (H * W)] = (cVal - pVal) / (cVal + pVal + 1e-7);
+                        buffer[offset + (c + 3) * (H * W)] = cVal / 255.0;
+                    }
+                }
+            }
+            return { 'input': new ort.Tensor('float32', buffer, [T, 6, H, W]) };
         }
 
-        // Create tensor shape
+        // 2. BigSmall (Dual input)
+        if (modelType === 'BigSmall') {
+            const T = frames.length;
+            const H = this.frameHeight;
+            const W = this.frameWidth;
+            const bigData = new Float32Array(T * 3 * H * W);
+            const smallData = new Float32Array(T * 3 * 9 * 9);
+
+            for (let f = 0; f < T; f++) {
+                const data = frames[f].data;
+                // Big input (144x144)
+                for (let i = 0; i < H * W; i++) {
+                    bigData[f * (3 * H * W) + 0 * (H * W) + i] = data[i * 4] / 255.0;
+                    bigData[f * (3 * H * W) + 1 * (H * W) + i] = data[i * 4 + 1] / 255.0;
+                    bigData[f * (3 * H * W) + 2 * (H * W) + i] = data[i * 4 + 2] / 255.0;
+                }
+
+                // Small input (9x9) - Uniform downsampling
+                const strideH = Math.floor(H / 9);
+                const strideW = Math.floor(W / 9);
+                for (let sh = 0; sh < 9; sh++) {
+                    for (let sw = 0; sw < 9; sw++) {
+                        const srcIdx = ((sh * strideH) * W + (sw * strideW)) * 4;
+                        const dstIdx = f * (3 * 81) + sh * 9 + sw;
+                        smallData[dstIdx] = data[srcIdx] / 255.0;
+                        smallData[dstIdx + 81] = data[srcIdx + 1] / 255.0;
+                        smallData[dstIdx + 162] = data[srcIdx + 2] / 255.0;
+                    }
+                }
+            }
+
+            return {
+                'big_input': new ort.Tensor('float32', bigData, [T, 3, H, W]),
+                'small_input': new ort.Tensor('float32', smallData, [T, 3, 9, 9])
+            };
+        }
+
+        // 3. Standard 3D CNN (Balanced, PhysNet, PhysFormer)
         const shape = [1, 3, this.sequenceLength, this.frameHeight, this.frameWidth];
         const dataSize = shape.reduce((a, b) => a * b);
-
-        // Reuse existing buffer or create new one if needed (dimensions changed or first run)
         if (!this._preprocessingBuffer || this._preprocessingBuffer.length !== dataSize) {
-            console.log(`[InferenceWorker] Creating new preprocessing buffer of size ${dataSize}`);
             this._preprocessingBuffer = new Float32Array(dataSize);
         }
 
-        // Optimization: Use direct array indexing with precalculated constants
-        // Pre-calculate constants used in the inner loops to avoid repetitive multiplications
         const frameStride = this.frameHeight * this.frameWidth;
         const channelStride = this.sequenceLength * frameStride;
 
-        // Use direct buffer filling with optimized indexing
-        for (let f = 0; f < frames.length; f++) {
-            const frame = frames[f];
-            const frameData = frame.data;
+        if (modelType === 'PhysFormer') {
+            // PhysFormer expects DiffNormalized input: (x[t+1] - x[t]) / (x[t+1] + x[t] + eps)
+            for (let f = 0; f < frames.length; f++) {
+                const currentData = frames[f].data;
+                const nextData = frames[f < frames.length - 1 ? f + 1 : f].data;
 
-            // Process all pixels for all channels simultaneously with optimized loop ordering
-            // This loop structure is cache-friendly and reduces time complexity
-            for (let h = 0; h < this.frameHeight; h++) {
-                for (let w = 0; w < this.frameWidth; w++) {
-                    const pixelPos = (h * this.frameWidth + w) * 4;
-                    const pixelOffset = f * frameStride + h * this.frameWidth + w;
+                for (let h = 0; h < this.frameHeight; h++) {
+                    for (let w = 0; w < this.frameWidth; w++) {
+                        const pixelPos = (h * this.frameWidth + w) * 4;
+                        const pixelOffset = f * frameStride + h * this.frameWidth + w;
 
-                    // Process all 3 channels for this pixel position
-                    this._preprocessingBuffer[pixelOffset] = frameData[pixelPos] / 255.0;                        // Red
-                    this._preprocessingBuffer[channelStride + pixelOffset] = frameData[pixelPos + 1] / 255.0;    // Green
-                    this._preprocessingBuffer[2 * channelStride + pixelOffset] = frameData[pixelPos + 2] / 255.0; // Blue
+                        for (let c = 0; c < 3; c++) {
+                            const cVal = nextData[pixelPos + c];
+                            const pVal = currentData[pixelPos + c];
+                            const diffVal = (f < frames.length - 1)
+                                ? (cVal - pVal) / (cVal + pVal + 1e-7)
+                                : 0;
+                            this._preprocessingBuffer[c * channelStride + pixelOffset] = diffVal;
+                        }
+                    }
                 }
+            }
+
+            // Global standard deviation normalization as required by PhysFormer/PhysNet
+            let sum = 0;
+            for (let i = 0; i < dataSize; i++) sum += this._preprocessingBuffer[i];
+            const mean = sum / dataSize;
+
+            let sqDiffSum = 0;
+            for (let i = 0; i < dataSize; i++) sqDiffSum += Math.pow(this._preprocessingBuffer[i] - mean, 2);
+            const std = Math.sqrt(sqDiffSum / dataSize + 1e-6);
+
+            for (let i = 0; i < dataSize; i++) {
+                this._preprocessingBuffer[i] = (this._preprocessingBuffer[i] - mean) / std;
+            }
+        } else {
+            // Standard Z-Score for other models (Balanced, PhysNet if not DiffNormalized)
+            for (let f = 0; f < frames.length; f++) {
+                const frameData = frames[f].data;
+                for (let h = 0; h < this.frameHeight; h++) {
+                    for (let w = 0; w < this.frameWidth; w++) {
+                        const pixelPos = (h * this.frameWidth + w) * 4;
+                        const pixelOffset = f * frameStride + h * this.frameWidth + w;
+                        this._preprocessingBuffer[pixelOffset] = frameData[pixelPos];
+                        this._preprocessingBuffer[channelStride + pixelOffset] = frameData[pixelPos + 1];
+                        this._preprocessingBuffer[2 * channelStride + pixelOffset] = frameData[pixelPos + 2];
+                    }
+                }
+            }
+
+            const normalizationDataSize = 3 * this.sequenceLength * this.frameHeight * this.frameWidth;
+            let mean = 0;
+            let std = 0;
+
+            for (let i = 0; i < normalizationDataSize; i++) mean += this._preprocessingBuffer[i];
+            mean /= normalizationDataSize;
+
+            for (let i = 0; i < normalizationDataSize; i++) std += (this._preprocessingBuffer[i] - mean) ** 2;
+            std = Math.sqrt(std / normalizationDataSize + 1e-6);
+
+            for (let i = 0; i < dataSize; i++) {
+                this._preprocessingBuffer[i] = (this._preprocessingBuffer[i] - mean) / std;
             }
         }
 
-        // Reuse tensor object if possible or create a new one
-        if (this._preprocessingTensor) {
-            // ORT API allows replacing the data of an existing tensor
-            (this._preprocessingTensor.data as Float32Array).set(this._preprocessingBuffer);
-            return this._preprocessingTensor;
-        } else {
-            // First time - create a new tensor
-            this._preprocessingTensor = new ort.Tensor('float32', this._preprocessingBuffer, shape);
-            return this._preprocessingTensor;
+        const feeds: { [key: string]: ort.Tensor } = {
+            'input': new ort.Tensor('float32', this._preprocessingBuffer, shape)
+        };
+
+        if (modelType === 'PhysFormer') {
+            feeds['gra_sharp'] = new ort.Tensor('float32', new Float32Array([1.0]), []);
         }
+
+        return feeds;
     }
 
     private async processFrames(frameBuffer: ImageData[]): Promise<SignalBuffers | null> {
@@ -246,49 +367,51 @@ class InferenceWorker {
             throw new Error('Worker not initialized');
         }
 
-        // Check if capture is still active
         if (!this.signalProcessor.isCapturing) {
             return null;
         }
 
-        // FIX: Add validation for input frames
         if (!frameBuffer || frameBuffer.length < this.MIN_FRAMES_REQUIRED) {
-            console.warn(`[InferenceWorker] Insufficient frames: ${frameBuffer?.length || 0}/${this.MIN_FRAMES_REQUIRED}`);
             return null;
         }
+
         try {
-            // Start timing the inference process
             const inferenceStartTime = performance.now();
-
-            // Prepare input tensor
-            const inputTensor = this.preprocessFrames(frameBuffer);
-            const feeds = { [this.inputName]: inputTensor };
-
-            // Run inference
+            const feeds = this.preprocessFrames(frameBuffer);
             const results = await this.session.run(feeds);
             const timestamp = new Date().toISOString();
 
-            // Calculate inference time
-            const inferenceTime = performance.now() - inferenceStartTime;
-
-            // Update inference time in signal processor (this will log to console)
             if (this.signalProcessor) {
-                this.signalProcessor.setInferenceTime(inferenceTime);
+                this.signalProcessor.setInferenceTime(performance.now() - inferenceStartTime);
             }
 
-            // Additional console log for more visibility
-            console.log(`[InferenceWorker] Model inference completed in ${inferenceTime.toFixed(2)} ms`);
+            // Flexible output parsing
+            const outputNames = Object.keys(results);
+            const bvpKey = outputNames.find(k => k.toLowerCase().includes('bvp') || k === 'output' || k === 'rPPG');
+            const respKey = outputNames.find(k => k.toLowerCase().includes('resp') || k === 'rRSP');
+            const auKey = outputNames.find(k => k.toLowerCase().includes('au'));
 
-            if (!results.rPPG || !results.rRSP) {
-                throw new Error('Invalid model output');
+            if (!bvpKey) {
+                console.error('[InferenceWorker] Missing BVP output in results. Available keys:', outputNames);
+                throw new Error('Missing BVP output');
             }
 
-            // Convert to arrays
-            const bvpSignal = Array.from(results.rPPG.data as Float32Array);
-            const respSignal = Array.from(results.rRSP.data as Float32Array);
+            const bvpData = results[bvpKey].data as Float32Array;
+            const respData = respKey ? (results[respKey].data as Float32Array) : bvpData; // If no explicit resp, use bvp for cross-channel extraction
 
-            // Process signals
-            const processedSignals = this.signalProcessor.processNewSignals(bvpSignal, respSignal, timestamp);
+            let actionUnits: number[] | undefined = undefined;
+            if (auKey) {
+                const rawAus = Array.from(results[auKey].data as Float32Array);
+                actionUnits = rawAus.slice(-12);
+            }
+
+            // Important: Use signalProcessor for core filtering and rate calculation
+            const processedSignals = this.signalProcessor.processNewSignals(
+                Array.from(bvpData),
+                Array.from(respData),
+                timestamp
+            );
+
             return {
                 bvp: {
                     raw: processedSignals.displayData.bvp,
@@ -300,202 +423,93 @@ class InferenceWorker {
                     filtered: processedSignals.displayData.filteredResp || [],
                     metrics: processedSignals.resp
                 },
-                timestamp,
+                actionUnits,
+                timestamp
             };
-
-        }
-        catch (error) {
-            console.error('[InferenceWorker] Frame processing error:', error);
+        } catch (error) {
+            console.error('[InferenceWorker] processFrames error:', error);
             throw error;
         }
     }
 
     async runInference(frames: ImageData[]): Promise<void> {
-        // Check if signal processor is initialized and capture is active
-        if (!this.signalProcessor || !this.isInitialized || isShuttingDown || globalStopRequested) {
-            return;
-        }
-
-        // Skip if capture is inactive
-        if (!this.signalProcessor.isCapturing) {
-            console.log('[InferenceWorker] Skipping inference because capture is inactive');
-            return;
-        }
+        if (!this.signalProcessor || !this.isInitialized || isShuttingDown || globalStopRequested) return;
+        if (!this.signalProcessor.isCapturing) return;
 
         try {
             const processingStart = performance.now();
-            console.log(`[InferenceWorker] Processing batch of ${frames.length} frames`);
-
-            // Process frames and get signals
             const processedSignals = await this.processFrames(frames);
 
-            // Check again before sending results
-            if (!processedSignals || isShuttingDown || !this.signalProcessor.isCapturing) {
-                return;
-            }
+            if (!processedSignals || isShuttingDown || !this.signalProcessor.isCapturing) return;
 
-            const totalTime = performance.now() - processingStart;
-
-            // Log performance metrics
-            console.log(`[InferenceWorker] Performance summary:`);
-            console.log(`- Total processing: ${totalTime.toFixed(2)} ms`);
-
-            // Send results to main thread
             self.postMessage({
                 type: 'inferenceResult',
                 status: 'success',
-                bvp: {
-                    raw: processedSignals.bvp.raw,
-                    filtered: processedSignals.bvp.filtered,
-                    metrics: processedSignals.bvp.metrics,
-                },
-                resp: {
-                    raw: processedSignals.resp.raw,
-                    filtered: processedSignals.resp.filtered,
-                    metrics: processedSignals.resp.metrics,
-                },
+                bvp: processedSignals.bvp,
+                resp: processedSignals.resp,
+                actionUnits: (processedSignals as any).actionUnits,
                 timestamp: processedSignals.timestamp,
                 performanceMetrics: {
-                    averageUpdateTime: totalTime,
+                    averageUpdateTime: performance.now() - processingStart,
                     updateCount: 1,
-                    bufferUtilization: 100,
-                },
+                    bufferUtilization: 100
+                }
             });
         } catch (error) {
-            console.error('[InferenceWorker] Inference error:', error);
-            self.postMessage({
-                type: 'inferenceResult',
-                status: 'error',
-                error: error instanceof Error ? error.message : String(error)
-            });
+            console.error('[InferenceWorker] runInference error:', error);
+            self.postMessage({ type: 'inferenceResult', status: 'error', error: String(error) });
         }
     }
 
     async exportData(): Promise<void> {
         try {
-            console.log('[InferenceWorker] Preparing data for export...');
-
-            // Make sure we have a signal processor, even if in shutdown state
-            if (!this.signalProcessor) {
-                throw new Error('Signal processor not initialized');
-            }
-
-            // Get export data from signal processor
+            if (!this.signalProcessor) throw new Error('Signal processor not' + ' initialized');
             const data = this.signalProcessor.getExportData();
-
-            // Check if we actually have data to export
-            if (!data || !data.signals ||
-                (!data.signals.bvp.raw.length && !data.signals.resp.raw.length)) {
-                throw new Error('No data available to export');
+            if (!data?.signals?.bvp?.raw?.length && !data?.signals?.resp?.raw?.length) {
+                throw new Error('No data to export');
             }
-
-            // Convert data to JSON string
-            const exportedData = JSON.stringify(data);
-            console.log('[InferenceWorker] Data prepared for export, size:', exportedData.length);
-
-            // Send to main thread - only send once
-            self.postMessage({
-                type: 'exportData',
-                status: 'success',
-                data: exportedData
-            });
-
-            console.log('[InferenceWorker] Export data sent to main thread');
+            self.postMessage({ type: 'exportData', status: 'success', data: JSON.stringify(data) });
         } catch (error) {
-            console.error('[InferenceWorker] Export error:', error);
-            self.postMessage({
-                type: 'exportData',
-                status: 'error',
-                error: error instanceof Error ? error.message : String(error)
-            });
+            self.postMessage({ type: 'exportData', status: 'error', error: String(error) });
         }
     }
 
     startCapture(): void {
-        if (!this.signalProcessor) {
-            throw new Error('Signal processor not initialized');
-        }
-        console.log('[InferenceWorker] Starting signal capture');
+        isShuttingDown = false;
+        globalStopRequested = false;
+        if (!this.signalProcessor) throw new Error('No signal processor');
         this.signalProcessor.startCapture();
-
-        // Add debug to verify capture state
-        console.log('[InferenceWorker] Capture active:', this.signalProcessor.isCapturing);
+        this.signalProcessor.isCapturing = true;
+        console.log('[InferenceWorker] Signal capture started');
     }
 
-    // FIX: Improve stopCapture method to ensure immediate response
     stopCapture(): void {
-        console.log('[InferenceWorker] STOP CAPTURE called');
-
-        // Set global state first - these flags stop any new processing
-        globalStopRequested = true;
-        isShuttingDown = true;
-
-        if (!this.signalProcessor) {
-            console.log('[InferenceWorker] No signal processor to stop');
-            // Still respond to main thread
-            self.postMessage({
-                type: 'stopCapture',
-                status: 'success',
-                message: 'Worker stopping activities'
-            });
-            return;
+        console.log('[InferenceWorker] Stop capture requested');
+        if (this.signalProcessor) {
+            this.signalProcessor.stopCapture();
+            this.signalProcessor.isCapturing = false;
         }
-
-        console.log('[InferenceWorker] Before stopping signal processor:', this.signalProcessor.isCapturing);
-
-        // Stop the capture
-        this.signalProcessor.stopCapture();
-
-        // Force all flags to inactive state
-        this.signalProcessor.isCapturing = false;
-        // this.isInitialized = false;
-
-        console.log('[InferenceWorker] After stopping signal processor:', this.signalProcessor.isCapturing);
-
-        // Respond to main thread AFTER stopping everything
-        self.postMessage({
-            type: 'stopCapture',
-            status: 'success',
-            message: 'Worker stopping activities'
-        });
+        self.postMessage({ type: 'stopCapture', status: 'success' });
     }
 
     reset(): void {
-        console.log('[InferenceWorker] Full worker reset initiated');
-
-        // Reset global flags first - CRITICAL
         isShuttingDown = false;
         globalStopRequested = false;
-
-        // Reset signal processor if it exists
         if (this.signalProcessor) {
             this.signalProcessor.reset();
-            // Ensure capture state is reset but initialized state is preserved
             this.signalProcessor.isCapturing = false;
         }
-
-        // Restore initialization flag - extremely important
         this.isInitialized = true;
-
-        console.log('[InferenceWorker] Worker reset complete, ready for new capture');
-
-        // Immediately confirm reset to main thread
         self.postMessage({ type: 'reset', status: 'success' });
     }
 
     async dispose(): Promise<void> {
-        try {
-            if (this.session) {
-                await this.session.release();
-                this.session = null;
-            }
-            this.signalProcessor = null;
-            this.isInitialized = false;
-            console.log('Worker resources released successfully');
-        } catch (error) {
-            console.error('Error disposing worker resources:', error);
-            throw error;
+        if (this.session) {
+            await this.session.release();
+            this.session = null;
         }
+        this.signalProcessor = null;
+        this.isInitialized = false;
     }
 }
 
@@ -545,7 +559,12 @@ self.onmessage = async (e: MessageEvent) => {
 
         switch (e.data.type) {
             case 'init':
-                await worker.initialize();
+                await worker.initialize(e.data.config);
+                // Placeholder for BigSmall multi-task parsing logic if needed
+                if (e.data.config?.modelType === 'BigSmall') {
+                    console.log('[InferenceWorker] Initialized for BigSmall multi-task model.');
+                    // Add specific BigSmall model parsing/setup logic here
+                }
                 break;
             case 'startCapture':
                 try {
@@ -572,7 +591,7 @@ self.onmessage = async (e: MessageEvent) => {
                         error: error instanceof Error ? error.message : 'Failed to start capture'
                     });
                 }
-                    break;
+                break;
             case 'inferenceResult':
                 await worker.runInference(e.data.frameBuffer);
                 break;

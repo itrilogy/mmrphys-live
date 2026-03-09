@@ -45,8 +45,8 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({
                         />
                         <span className="progress-text">
                             {bufferProgress < 100
-                                ? `${Math.round(bufferProgress)}% Ready`
-                                : 'Processing...'}
+                                ? `${Math.round(bufferProgress)}% 就绪`
+                                : '处理中...'}
                         </span>
                     </div>
                 )}
@@ -59,14 +59,6 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({
                 </div>
             )}
 
-            {!faceDetected && !error && (
-                <div className="no-face-warning">
-                    <p>Position your face in the oval</p>
-                    <p className="text-sm opacity-75">
-                        Using center region for processing
-                    </p>
-                </div>
-            )}
         </div>
     );
 };

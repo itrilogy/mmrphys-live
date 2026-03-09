@@ -33,6 +33,7 @@ interface VitalSignsChartProps {
     quality?: 'excellent' | 'good' | 'moderate' | 'poor';
     type: 'bvp' | 'resp';
     isReady: boolean;
+    avgRate?: number;
 }
 
 const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
@@ -43,7 +44,8 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
     snr = 0,
     quality = 'poor',
     type = 'bvp',
-    isReady = false
+    isReady = false,
+    avgRate = 0
 }) => {
     // Chart options with proper type safety
     const chartOptions = useMemo(() => {
@@ -64,7 +66,7 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
                     display: true,
                     title: {
                         display: true,
-                        text: 'Time (seconds)'
+                        text: '时间 (秒)'
                     },
                     min: 0,
                     max: timeWindow,
@@ -76,7 +78,7 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
                     display: true,
                     title: {
                         display: true,
-                        text: type === 'bvp' ? 'Blood Volume Pulse Signal' : 'Respiratory Signal'
+                        text: type === 'bvp' ? '血容积脉搏信号 (BVP)' : '呼吸信号'
                     },
                     min: -1.05,
                     max: 1.05
@@ -93,7 +95,7 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
                     callbacks: {
                         label: (context: { parsed: { y: number }, datasetIndex: number }) => {
                             const value = context.parsed.y;
-                            const label = type === 'bvp' ? 'Filtered BVP' : 'Filtered Resp';
+                            const label = type === 'bvp' ? '滤波后 BVP' : '滤波后呼吸信号';
                             return `${label}: ${value.toFixed(3)}`;
                         }
                     }
@@ -142,8 +144,8 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
         return (
             <div className="vital-signs-chart not-ready">
                 <div className="chart-placeholder">
-                    <p>Initializing...</p>
-                    <p>Collecting data</p>
+                    <p>正在初始化...</p>
+                    <p>正在采集数据</p>
                 </div>
             </div>
         );
@@ -177,16 +179,21 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
                 <Line
                     options={chartOptions}
                     data={chartData}
-                    fallbackContent={<div>Unable to render chart</div>}
+                    fallbackContent={<div>无法渲染图表</div>}
                 />
             </div>
             <div className="metrics-container mt-4 grid grid-cols-2 gap-4">
                 <div className={`rate-metric p-2 rounded ${getRateClass(rate)}`}>
                     <div className="text-lg font-bold">
-                        {Number(rate).toFixed(1)} {type === 'bvp' ? 'BPM' : 'Breaths/min'}
+                        {Number(rate).toFixed(1)} {type === 'bvp' ? '次/分 (BPM)' : '次/分'}
                     </div>
-                    <div className="text-sm opacity-75">
-                        {type === 'bvp' ? 'Heart Rate' : 'Respiratory Rate'}
+                    <div className="flex justify-between items-center text-sm opacity-75">
+                        <span>{type === 'bvp' ? '实时心率' : '实时呼吸率'}</span>
+                        {avgRate > 0 && (
+                            <span className="font-medium bg-white/20 px-1.5 rounded">
+                                平均: {avgRate.toFixed(1)}
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className={`snr-metric p-2 rounded ${getSignalQualityClass(quality)}`}>
@@ -194,7 +201,7 @@ const VitalSignsChart: React.FC<VitalSignsChartProps> = ({
                         {Number(snr).toFixed(1)} dB
                     </div>
                     <div className="text-sm opacity-75">
-                        Signal Quality
+                        信号质量
                     </div>
                 </div>
             </div>

@@ -6,18 +6,18 @@ const Footer: React.FC = () => {
             <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <h3 className="font-semibold mb-2">Data Privacy Note:</h3>
+                        <h3 className="font-semibold mb-2">数据隐私说明：</h3>
                         <p className="text-sm text-gray-600">
-                            Videos are processed entirely on your device and are never uploaded to any server. The loaded videos as well as the captured video frames are immediately discarded after processing.
+                            视频完全在您的本地设备上进行处理，绝不会上传到任何服务器。加载的视频以及捕获的视频帧在处理后会立即清除。
                         </p>
                     </div>
                     <div>
-                        <h3 className="font-semibold mb-2">Citations:</h3>
+                        <h3 className="font-semibold mb-2">引用文献：</h3>
                         <p className="text-sm text-gray-600">
-                            If you utilize the MMRPhys model or this web application in your research, please cite the following papers: <br />
+                            如果您在研究中使用了 MMRPhys 模型或此 Web 应用程序，请引用以下论文：<br />
                         </p>
                         <p className="text-sm text-gray-600">
-                            [1] Jitesh Joshi and Youngjun Cho, "Efficient and Robust Multidimensional Attention in Remote Physiological Sensing through Target Signal Constrained Factorization", 2025. arXiv: 2505.07013 [cs.CV]<br/>
+                            [1] Jitesh Joshi and Youngjun Cho, "Efficient and Robust Multidimensional Attention in Remote Physiological Sensing through Target Signal Constrained Factorization", 2025. arXiv: 2505.07013 [cs.CV]<br />
                         </p>
                         <p className="text-sm text-gray-600">
                             [2] Jitesh Joshi, Youngjun Cho, and Sos Agaian, “FactorizePhys: Effective Spatial-Temporal Attention in Remote Photo-plethysmography through Factorization of Voxel Embeddings”, NeurIPS, 2024.<br />
@@ -27,14 +27,14 @@ const Footer: React.FC = () => {
                         </p>
                     </div>
                     <div>
-                        <h3 className="font-semibold mb-2">Source Code:</h3>
+                        <h3 className="font-semibold mb-2">源代码：</h3>
                         <p className="text-sm text-gray-600">
                             MMRPhys: <a href="https://github.com/PhysiologicAILab/MMRPhys" target="_blank" rel="noopener noreferrer">https://github.com/PhysiologicAILab/MMRPhys</a>.
                         </p>
                         <p className="text-sm text-gray-600">
                             MMRPhys Webapp: <a href="https://github.com/physiologicailab/mmrphys-live" target="_blank" rel="noopener noreferrer">https://github.com/physiologicailab/mmrphys-live</a>.
                         </p>
-                        
+
                     </div>
                     {/* <div>
                         <h3 className="font-semibold mb-2">Copyright:</h3>

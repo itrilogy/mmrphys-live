@@ -64,12 +64,10 @@ export const useVitalSigns = ({ isCapturing, onError }: UseVitalSignsProps) => {
         });
     }, []);
 
-    // Handle state cleanup when capturing stops
-    useEffect(() => {
-        if (!isCapturing) {
-            resetData();
-        }
-    }, [isCapturing, resetData]);
+    // Note: Automatic resetData on capture stop was removed 
+    // to allow data persistence for export and review.
+    // resetData() will now be called manually from App.tsx 
+    // when starting a new capture or loading a new video.
 
     return {
         vitalSigns,

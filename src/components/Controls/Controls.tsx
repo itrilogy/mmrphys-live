@@ -7,18 +7,19 @@ const Controls: React.FC<ControlsProps> = ({
     onStart,
     onStop,
     onExport,
+    onGenerateReport,
     onVideoFileSelected
 }) => {
     return (
         <div className="controls">
             <button
-                className="control-button"
+                className="btn-biopulse-secondary"
                 onClick={() => document.getElementById('video-file-input')?.click()}
                 disabled={isCapturing}
-                title="Load video file for analysis"
+                title="加载视频文件进行分析"
             >
-                <span className="button-icon">📁</span>
-                Load Video
+                <span className="text-lg">📁</span>
+                加载视频
             </button>
             <input
                 id="video-file-input"
@@ -28,30 +29,41 @@ const Controls: React.FC<ControlsProps> = ({
                 onChange={onVideoFileSelected}
             />
             <button
-                className="btn primary"
+                className="btn-biopulse-primary"
                 onClick={onStart}
                 disabled={!isInitialized || isCapturing}
             >
-                <span className="btn-icon">▶</span>
-                Start Capture
+                <span className="text-lg">▶</span>
+                开始捕获
             </button>
 
             <button
-                className="btn secondary"
+                className="btn-biopulse-secondary"
                 onClick={onStop}
                 disabled={!isCapturing}
             >
-                <span className="btn-icon">⏹</span>
-                Stop Capture
+                <span className="text-lg">⏹</span>
+                停止捕获
             </button>
 
             <button
-                className="btn secondary"
+                className="btn-biopulse-secondary"
                 onClick={onExport}
                 disabled={isCapturing}
+                title="导出原始 JSON 数据"
             >
-                <span className="btn-icon">⬇</span>
-                Export Data
+                <span className="text-lg">⬇</span>
+                导出数据
+            </button>
+
+            <button
+                className="btn-biopulse-accent"
+                onClick={onGenerateReport}
+                disabled={isCapturing}
+                title="生成可视化 PDF 检测报告"
+            >
+                <span className="text-lg">📋</span>
+                生成报告
             </button>
         </div>
     );

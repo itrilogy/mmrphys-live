@@ -1,174 +1,69 @@
-# MMRPhys-Live
+# BioPulse 3.2 - 生理信号提取验证平台
 
-Real-time remote physiological sensing application using deep learning models for non-contact vital signs monitoring.
+BioPulse 3.2 是一个基于视觉的远程生理感知 (rPPG) Web 平台。本项目在上游开源项目的基础之上进行了深度的工程化与场景化拓展，突破了单一模型的局限，引入了多模型、多场景矩阵架构，能够直接从普通网络摄像头视频流中实时提取心率 (Heart Rate) 和呼吸率 (Respiratory Rate)。
 
-## Overview
+## 产品作者
+鹿溪联合创新实验室，Kwangwah Hung
 
-MMRPhys-Live is a web application that monitors vital signs (heart rate and respiratory rate) using facial video analysis. It currently deploys MMRPhys model trained using the [SCAMPS dataset](https://github.com/danmcduff/scampsdataset) to extract physiological signals from facial videos in real-time.
+## 系统架构与技术原理
 
-## Live Demo
+1. **多模型与全场景矩阵**：突破了原始 [MMRPhys-Live](https://github.com/PhysiologicAILab/mmrphys-live) 单一模型的局限，深度集成了四大独立架构引擎，分别映射至四大核心运行场景：
+   - **基础快速检测 (TS-CAN)**：极轻量流式网络，适合低延迟快速响应。
+   - **标准健康监测 (SCAMPS)**：主力卷积架构，临床级精度对齐，支持 BVP 与呼吸双任务监测。
+   - **驾驶/疲劳监测 (BigSmall)**：多任务复合网络，同步分析生理指标与面部关键动作单元 (AUs)。
+   - **科研高精分析 (PhysFormer)**：时空 Transformer 架构，捕捉亚像素级微色差，用于 HRV 深度解算。
+2. **前端隔离架构**：采用 React SPA 模式，将繁重的深度学习推理和信号处理（Butterworth 滤波、FFT 频域分析）通过 Web Workers 分离至后台线程，确保高平滑的 30FPS UI 渲染。
+3. **时间差分驱动模型**：基于 3D 卷积神经网络 (3D CNN) 的 MMRPhysSEF 模型架构。系统输入的是 72x72 分辨率的面部时间差分序列 (Time Difference)，有效地消除了环境光的 DC 缓变，强化了由于血容量搏动引起的面部微观颜色与运动变化。
+4. **本地级实时引擎**：基于 ONNX Runtime Web，充分利用浏览器端 WebAssembly 和 SIMD 硬件指令集加速，使得 3D 卷积推理无需 GPU 也可流畅运行于普通终端设备。
 
-Try the application here: [MMRPhys-Live Demo](https://physiologicailab.github.io/mmrphys-live/)
+## 开源基石文献 (Open Source)
 
-## Features
+本代码项目构架与模型推理逻辑基于以下卓越的开源项目：
+* **MMRPhys-Live**: [https://github.com/PhysiologicAILab/mmrphys-live](https://github.com/PhysiologicAILab/mmrphys-live)
+* **MMRPhys Model**: [https://github.com/PhysiologicAILab/MMRPhys](https://github.com/PhysiologicAILab/MMRPhys)
+* **rPPG-Toolbox**: [https://github.com/ubicomplab/rPPG-Toolbox](https://github.com/ubicomplab/rPPG-Toolbox)
 
-- Real-time video capture with face detection
-- Blood Volume Pulse (BVP) signal extraction
-- Respiratory signal extraction
-- Heart rate and respiratory rate monitoring
-- Real-time signal visualization with Chart.js
-- Data export functionality
-- Cross-platform compatibility (works on desktop and mobile browsers)
-- Web Worker-based processing for improved performance
+## 学术引文 (Citations)
 
-## Technology Stack
+**MMPRPhys Related**
 
-- React (TypeScript)
-- ONNX Runtime Web for model inference
-- Face-API.js for face detection
-- Chart.js for real-time data visualization
-- Vite for development and bundling
-- Tailwind CSS for styling
+If you utilize the MMRPhys model or this web application in your research, please cite the following papers:
+1. Jitesh Joshi and Youngjun Cho, "Efficient and Robust Multidimensional Attention in Remote Physiological Sensing through Target Signal Constrained Factorization", 2025. arXiv: 2505.07013 [cs.CV]
+2. Jitesh Joshi, Youngjun Cho, and Sos Agaian, “FactorizePhys: Effective Spatial-Temporal Attention in Remote Photo-plethysmography through Factorization of Voxel Embeddings”, NeurIPS, 2024.
+3. Jitesh Joshi and Youngjun Cho, “iBVP Dataset: RGB-thermal rPPG Dataset with High Resolution Signal Quality Labels”, MDPI Electronics, 13(7), 2024.
 
-## Prerequisites
+**rPPG-Toolbox Related**
 
-- Node.js (v16 or higher)
-- npm (v7 or higher)
-- Modern web browser with camera access
+If you find our paper or this toolbox useful for your research, please cite our work.  
+如果您发现我们的论文或此工具箱对您的研究有用，请引用我们的工作。
 
-## Installation
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/PhysiologicAILab/mmrphys-live.git
-cd mmrphys-live
+```bibtex
+@article{liu2022rppg,
+  title={rPPG-Toolbox: Deep Remote PPG Toolbox},
+  author={Liu, Xin and Narayanswamy, Girish and Paruchuri, Akshay and Zhang, Xiaoyu and Tang, Jiankai and Zhang, Yuzhe and Wang, Yuntao and Sengupta, Soumyadip and Patel, Shwetak and McDuff, Daniel},
+  journal={arXiv preprint arXiv:2210.00716},
+  year={2022}
+}
 ```
 
-2. Install dependencies:
+## 开发与运行指南 (Development Reference)
 
-```bash
-npm install
-```
+### 环境要求 (Prerequisites)
+- Node.js (v16 或更高版本)
+- npm (v7 或更高版本)
+- 授予摄像头访问权限的现代 Web 浏览器
 
-3. Set up models (face-api.js and ONNX models):
-
-```bash
-npm run setup
-```
-
-## Development
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-## Building for Production
-
-Build the application:
-
-```bash
-npm run build
-```
-
-Preview the production build:
-
-```bash
-npm run preview
-```
-
-## Deployment
-
-The application can be deployed to GitHub Pages using:
-
-```bash
-npm run deploy
-```
-
-The current deployment is available at: [https://physiologicailab.github.io/mmrphys-live/](https://physiologicailab.github.io/mmrphys-live/)
-
-## Project Structure
-
-```
-mmrphys-live/
-├── public/                   # Static assets
-│   ├── models/               # Model files
-│   │   ├── face-api/         # Face detection models
-│   │   └── rphys/            # Physiological sensing models
-│   └── ort/                  # ONNX Runtime Web assets
-├── src/
-│   ├── components/           # React components
-│   │   ├── Controls/         # Capture control components
-│   │   ├── StatusMessage/    # Status notifications
-│   │   ├── VideoDisplay/     # Video feed display
-│   │   └── VitalSignsChart/  # Charts for vital signs
-│   ├── hooks/                # Custom React hooks
-│   ├── services/             # Service layer
-│   ├── styles/               # CSS and styling
-│   ├── types/                # TypeScript type definitions
-│   ├── utils/                # Utility functions
-│   ├── workers/              # Web Workers
-│   │   ├── inferenceWorker.ts # ONNX model inference
-│   │   └── videoProcessingWorker.ts # Video frame processing
-│   ├── App.tsx               # Main application component
-│   └── main.tsx              # Entry point
-├── scripts/                  # Build and setup scripts
-├── python_scripts/           # Python utilities to read and process the acquired data
-└── torch2onnx/               # PyTorch to ONNX conversion tools
-```
-
-## Configuration
-
-The application uses configuration files for the physiological sensing models in `public/models/rphys/config.json`. The key parameters include:
-
-- Frame buffer size
-- Sampling rate
-- Physiological signal parameters (min/max rates)
-- Model input/output specifications
-
-## Browser Support
-
-- Chrome (recommended)
-- Firefox
-- Safari
-- Edge
-
-The application works best on devices with good camera quality and processing power.
-
-## Analyzing Exported Data
-
-The application allows you to export vital signs data. After recording a session and exporting the data, you can use the included Python script to analyze and visualize the results:
-
-1. **Prerequisites:**
-   - Python 3.7+
-   - Required packages:
-
-    ```bash
-    pip install numpy scipy matplotlib
-    ```
-
-2. **Using the processing script:**
-
+### 本地部署 (Installation & Run)
+1. 克隆本仓库并进入根目录。
+2. 安装环境依赖：
    ```bash
-   python python_scripts/process_data.py path/to/exported_data.json --sampling_rate 30
+   npm install
    ```
-
-   This will:
-   - Load the exported vital signs data
-   - Filter the signals and compute heart rate and respiratory rate
-   - Generate and save visualization plots of the signals and their frequency spectra
-   - Compare computed values with the recorded values
-
-3. **Output:**
-   - Visual plots of BVP (blood volume pulse) and respiratory signals
-   - Frequency spectrum analysis
-   - Heart rate and respiratory rate calculations
-   - Plots are saved to the same directory as the input file
-
-## Citation
-
-(To be updated)
-
-Jitesh Joshi and Youngjun Cho, "Efficient and Robust Multidimensional Attention in Remote Physiological Sensing through Target Signal Constrained Factorization", In Review, 2025
+3. 启动开发服务器：
+   ```bash
+   npm run dev
+   ```
+4. 生产环境构建：
+   ```bash
+   npm run build
+   ```

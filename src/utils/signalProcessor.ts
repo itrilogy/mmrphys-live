@@ -18,16 +18,16 @@ interface RatePoint {
 export class SignalProcessor {
     private readonly fps: number;
 
-    // Constants for frame and signal management strategy
-    public readonly INITIAL_FRAMES = 181;
-    public readonly SUBSEQUENT_FRAMES = 121;
-    public readonly OVERLAP_FRAMES = this.INITIAL_FRAMES - this.SUBSEQUENT_FRAMES;
-    private readonly MIN_SECONDS_FOR_METRICS = 12; // Start computing metrics when we have at least this much data
-    private readonly METRICS_WINDOW_SECONDS = 30;  // Use 30 seconds for metrics when available
+    // Constants for frame and signal management strategy (now configurable)
+    public INITIAL_FRAMES: number;
+    public SUBSEQUENT_FRAMES: number;
+    public OVERLAP_FRAMES: number;
+    private readonly MIN_SECONDS_FOR_METRICS = 6;
+    private readonly METRICS_WINDOW_SECONDS = 12; // Adjusted for faster response
 
     // Flag to track if we've reached the minimum data threshold
     private hasReachedMinimumData: boolean = false;
-    
+
     // Constants for display and buffer management
     private readonly DISPLAY_SAMPLES_BVP = 300;  // 300 samples for BVP
     private readonly DISPLAY_SAMPLES_RESP = 450; // 450 samples for Resp
@@ -67,8 +67,15 @@ export class SignalProcessor {
     private _lastInferenceTime: number = 0;
 
 
-    constructor(fps: number = 30) {
+    constructor(
+        fps: number = 30,
+        initialFrames: number = 181,
+        subsequentFrames: number = 121
+    ) {
         this.fps = fps;
+        this.INITIAL_FRAMES = initialFrames;
+        this.SUBSEQUENT_FRAMES = subsequentFrames;
+        this.OVERLAP_FRAMES = Math.max(0, initialFrames - subsequentFrames);
 
         // Set appropriate moving average window sizes based on sampling rate
         this.BVP_MA_WINDOW = Math.round(0.35 * fps); // 350 ms for heart rate
@@ -130,7 +137,7 @@ export class SignalProcessor {
         // Don't reset the data buffers - we need to preserve them for export
         console.log('[SignalProcessor] Processing halted, data preserved for export');
     }
-    
+
     // Method to return empty results when not capturing
     private getEmptyResults(): {
         bvp: SignalMetrics,
@@ -211,11 +218,11 @@ export class SignalProcessor {
             const newBvpSamples = bvpSignal.slice(this.OVERLAP_FRAMES);
             const newRespSamples = respSignal.slice(this.OVERLAP_FRAMES);
 
-            // Update buffers with both overlapping and new samples
-            this.updateBuffer(this.bvpBuffer, [...overlapBvpSamples, ...newBvpSamples], 'heart');
-            this.updateBuffer(this.respBuffer, [...overlapRespSamples, ...newRespSamples], 'resp');
+            // Update buffers with ONLY new samples to prevent signal duplication/time stretching
+            this.updateBuffer(this.bvpBuffer, newBvpSamples, 'heart');
+            this.updateBuffer(this.respBuffer, newRespSamples, 'resp');
 
-            console.log(`Subsequent segment sizes - BVP: ${bvpSignal.length}, RESP: ${respSignal.length}`);
+            console.log(`Subsequent segment sizes - New BVP added: ${newBvpSamples.length}, New RESP added: ${newRespSamples.length}`);
         }
 
         // Store timestamps for export
